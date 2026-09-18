@@ -1,0 +1,1348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Layered NFT Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+  :root{
+    --bg:#17161c;
+    --panel:#201f28;
+    --panel-alt:#2a2933;
+    --line:#38363f;
+    --amber:#f2a65a;
+    --amber-dim:#8a6335;
+    --teal:#5fb3a3;
+    --text:#ede9e3;
+    --text-dim:#9a97a6;
+    --danger:#d97062;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Space Grotesk',sans-serif;
+    min-height:100vh;
+  }
+  ::selection{background:var(--amber);color:#17161c;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+
+  /* film sprocket motif */
+  .sprockets{
+    background-image: radial-gradient(circle, var(--line) 2.2px, transparent 2.4px);
+    background-size: 14px 14px;
+    background-position: 6px center;
+  }
+
+  header{
+    display:flex;align-items:center;gap:14px;
+    padding:18px 28px;
+    border-bottom:1px solid var(--line);
+    position:sticky;top:0;background:rgba(23,22,28,0.92);backdrop-filter:blur(6px);
+    z-index:50;
+  }
+  header .bulb{
+    width:14px;height:14px;border-radius:50%;
+    background:var(--amber);
+    box-shadow:0 0 12px 3px rgba(242,166,90,0.55);
+  }
+  header h1{font-size:17px;font-weight:600;margin:0;letter-spacing:0.2px;}
+  header .sub{font-size:12.5px;color:var(--text-dim);margin-left:2px;}
+
+  .layout{
+    display:grid;
+    grid-template-columns: 320px 1fr;
+    gap:0;
+    max-width:1280px;
+    margin:0 auto;
+  }
+  @media (max-width: 860px){
+    .layout{grid-template-columns: 1fr;}
+    aside{border-right:none !important;border-bottom:1px solid var(--line);}
+  }
+
+  aside{
+    border-right:1px solid var(--line);
+    padding:22px 20px;
+    align-self:start;
+    position:sticky; top:61px;
+    max-height:calc(100vh - 61px);
+    overflow-y:auto;
+  }
+  main{padding:22px 26px 60px;}
+
+  .section-title{
+    font-size:11px; text-transform:uppercase; letter-spacing:1.4px;
+    color:var(--text-dim); margin:0 0 12px 0; font-weight:600;
+  }
+
+  button{
+    font-family:'Space Grotesk',sans-serif;
+    cursor:pointer;
+    border:1px solid var(--line);
+    background:var(--panel-alt);
+    color:var(--text);
+    border-radius:8px;
+    padding:9px 14px;
+    font-size:13.5px;
+    font-weight:500;
+    transition:border-color .15s ease, transform .1s ease;
+  }
+  button:hover:not(:disabled){border-color:var(--amber-dim);}
+  button:active:not(:disabled){transform:scale(0.97);}
+  button:disabled{opacity:0.4;cursor:not-allowed;}
+  button.primary{
+    background:var(--amber);
+    color:#241a0d;
+    border-color:var(--amber);
+    font-weight:600;
+  }
+  button.primary:hover:not(:disabled){background:#f5b877;}
+  button.ghost{background:transparent;}
+  button.icon{
+    padding:6px 8px; font-size:13px; line-height:1;
+  }
+  button.danger:hover:not(:disabled){border-color:var(--danger); color:var(--danger);}
+
+  input[type=text], input[type=number]{
+    font-family:'Space Grotesk',sans-serif;
+    background:var(--panel-alt);
+    border:1px solid var(--line);
+    color:var(--text);
+    border-radius:7px;
+    padding:8px 10px;
+    font-size:13.5px;
+    width:100%;
+  }
+  input:focus, button:focus, textarea:focus{outline:2px solid var(--amber-dim); outline-offset:1px;}
+  label{font-size:12px;color:var(--text-dim);display:block;margin-bottom:5px;}
+  textarea{
+    font-family:'Space Grotesk',sans-serif;
+    background:var(--panel-alt); border:1px solid var(--line); color:var(--text);
+    border-radius:7px; padding:8px 10px; font-size:13.5px; width:100%; resize:vertical; min-height:52px;
+  }
+
+  #layerAddInput, #layerAppendInput{display:none;}
+
+  .layer-card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:12px 12px 10px;
+    margin-bottom:10px;
+  }
+  .layer-card-top{
+    display:flex; align-items:center; gap:8px; margin-bottom:8px;
+  }
+  .layer-order{display:flex;flex-direction:column;gap:2px;}
+  .layer-order button{padding:1px 6px;font-size:10px;}
+  .layer-name{
+    flex:1;
+    background:transparent;border:none;color:var(--text);
+    font-weight:600;font-size:13.5px;padding:2px 0;
+  }
+  .layer-name:focus{outline:none;border-bottom:1px solid var(--amber-dim);}
+  .layer-count{font-size:11px;color:var(--text-dim);}
+  .layer-strip{
+    display:flex; gap:6px; overflow-x:auto; padding:4px 0 2px;
+  }
+  .trait-chip{
+    position:relative; flex:0 0 auto;
+    width:42px;height:42px;border-radius:6px;overflow:hidden;
+    border:1px solid var(--line); background:#100f14 repeating-conic-gradient(#1c1b22 0% 25%, #16151b 0% 50%) 50%/10px 10px;
+  }
+  .trait-chip img{width:100%;height:100%;object-fit:contain;}
+  .trait-chip .rm{
+    position:absolute;top:0;right:0;background:rgba(0,0,0,0.65);
+    color:#eee;font-size:9px;line-height:1;padding:2px 3px;border-radius:0 0 0 5px;cursor:pointer;
+  }
+  .layer-actions{display:flex; gap:6px; margin-top:8px;}
+
+  .empty-hint{
+    font-size:12.5px;color:var(--text-dim);line-height:1.5;
+    border:1px dashed var(--line); border-radius:var(--radius);
+    padding:16px; text-align:center;
+  }
+
+  .stat-row{
+    display:flex; justify-content:space-between; align-items:baseline;
+    padding:10px 2px; border-top:1px solid var(--line); margin-top:6px;
+  }
+  .stat-row .num{font-family:'JetBrains Mono',monospace;font-size:15px;color:var(--amber);}
+  .stat-row .lbl{font-size:11.5px;color:var(--text-dim);}
+
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:20px 22px;
+    margin-bottom:22px;
+  }
+  .card h2{font-size:14.5px;margin:0 0 4px 0;font-weight:600;}
+  .card .desc{font-size:12.5px;color:var(--text-dim);margin:0 0 16px 0;line-height:1.5;}
+  .row{display:flex;gap:14px;flex-wrap:wrap;}
+  .field{flex:1;min-width:150px;}
+
+  .checkline{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);margin-top:4px;}
+  .checkline input{width:auto;}
+
+  .warn{
+    font-size:12px; color:var(--amber); background:rgba(242,166,90,0.08);
+    border:1px solid var(--amber-dim); border-radius:7px; padding:8px 10px; margin-top:10px;
+  }
+
+  .progress-wrap{margin-top:14px;display:none;}
+  .progress-wrap.active{display:block;}
+  .progress-track{
+    height:8px;border-radius:5px;background:var(--panel-alt);overflow:hidden;border:1px solid var(--line);
+  }
+  .progress-fill{
+    height:100%; width:0%; background:linear-gradient(90deg, var(--amber-dim), var(--amber));
+    transition:width .15s ease;
+  }
+  .progress-label{font-size:11.5px;color:var(--text-dim);margin-top:6px;font-family:'JetBrains Mono',monospace;}
+
+  .gallery-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap;}
+  .gallery-toolbar .count{font-size:12.5px;color:var(--text-dim);}
+  .pager{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-dim);}
+  .pager input{width:56px;text-align:center;padding:5px;}
+
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(128px,1fr));
+    gap:12px;
+  }
+  .token{
+    background:var(--panel-alt);
+    border:1px solid var(--line);
+    border-radius:9px;
+    overflow:hidden;
+  }
+  .token .thumb{
+    width:100%;aspect-ratio:1/1;
+    background:#100f14 repeating-conic-gradient(#1c1b22 0% 25%, #16151b 0% 50%) 50%/12px 12px;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .token .thumb img{width:100%;height:100%;object-fit:contain;}
+  .token .meta{padding:7px 8px 8px;}
+  .token .id{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);}
+  .token .btnrow{display:flex;gap:5px;margin-top:6px;}
+  .token .btnrow button{flex:1;padding:5px 4px;font-size:12px;}
+
+  footer.sprockets{
+    height:22px; border-top:1px solid var(--line); margin-top:10px;
+  }
+
+  .rule-card{
+    background:var(--panel-alt);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:14px 16px;
+    margin-bottom:12px;
+  }
+  .rule-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;}
+  .rule-row .lbl-text{color:var(--text-dim);white-space:nowrap;}
+  .rule-row select{
+    background:var(--panel);border:1px solid var(--line);color:var(--text);
+    border-radius:6px;padding:6px 8px;font-size:13px;font-family:'Space Grotesk',sans-serif;
+    max-width:180px;
+  }
+  .rule-close{margin-left:auto;}
+  .rule-target-traits{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
+  .rule-trait-toggle{
+    position:relative;width:48px;height:48px;border-radius:6px;overflow:hidden;
+    border:2px solid var(--teal);cursor:pointer;
+    background:#100f14 repeating-conic-gradient(#1c1b22 0% 25%, #16151b 0% 50%) 50%/10px 10px;
+  }
+  .rule-trait-toggle.blocked{border-color:var(--line);opacity:0.35;}
+  .rule-trait-toggle img{width:100%;height:100%;object-fit:contain;}
+  .rule-trait-toggle .lbl{
+    position:absolute;bottom:0;left:0;right:0;font-size:8px;background:rgba(0,0,0,0.65);
+    color:#eee;text-align:center;padding:1px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .rule-summary{font-size:11.5px;color:var(--text-dim);margin-top:9px;font-family:'JetBrains Mono',monospace;}
+
+  .rarity-layer{
+    border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;
+    margin-bottom:12px;background:var(--panel-alt);
+  }
+  .rarity-layer-head{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;}
+  .rarity-layer-name{font-weight:600;font-size:13.5px;}
+  .rarity-sum-badge{
+    font-family:'JetBrains Mono',monospace;font-size:11.5px;padding:2px 9px;border-radius:20px;
+    border:1px solid var(--line); margin-left:auto;
+  }
+  .rarity-sum-badge.ok{color:var(--teal);border-color:#33534c;background:rgba(95,179,163,0.08);}
+  .rarity-sum-badge.bad{color:var(--danger);border-color:#6b3630;background:rgba(217,112,98,0.08);}
+  .rarity-rows{display:flex;flex-direction:column;gap:6px;}
+  .rarity-row{display:flex;align-items:center;gap:10px;}
+  .rarity-thumb{
+    width:30px;height:30px;border-radius:5px;overflow:hidden;flex:0 0 auto;
+    border:1px solid var(--line); background:#100f14 repeating-conic-gradient(#1c1b22 0% 25%, #16151b 0% 50%) 50%/8px 8px;
+  }
+  .rarity-thumb img{width:100%;height:100%;object-fit:contain;}
+  .rarity-trait-name{flex:1;font-size:12.5px;color:var(--text);}
+  .rarity-input-wrap{display:flex;align-items:center;gap:4px;}
+  .rarity-input-wrap input{width:64px;padding:5px 6px;font-size:12.5px;text-align:right;}
+  .rarity-pct-sign{font-size:12px;color:var(--text-dim);}
+
+  .status-pill{
+    font-size:11px; color:var(--teal); border:1px solid #33534c; background:rgba(95,179,163,0.08);
+    padding:4px 9px; border-radius:20px; margin-left:auto; display:none;
+  }
+  .status-pill.show{display:inline-block;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="bulb"></div>
+  <h1>Layered NFT Generator</h1>
+  <span class="sub">stack layers &rarr; generate combinations &rarr; export</span>
+  <span class="status-pill mono" id="statusPill">working&hellip;</span>
+</header>
+
+<div class="layout">
+  <aside>
+    <div class="section-title">Layer Stack</div>
+    <input type="file" id="layerAddInput" webkitdirectory directory multiple>
+    <input type="file" id="layerAppendInput" multiple accept="image/*">
+    <button class="primary" id="addLayerBtn" style="width:100%;margin-bottom:14px;">+ Add Layer Folder</button>
+
+    <div id="layerList"></div>
+    <div id="emptyLayers" class="empty-hint">
+      No layers yet. Click "Add Layer Folder" and choose a folder of trait images (e.g. <span class="mono">Background/</span>, <span class="mono">Eyes/</span>). Layers stack bottom&nbsp;&rarr;&nbsp;top in the order you add them &mdash; reorder any time with the arrows.
+    </div>
+
+    <div class="stat-row">
+      <span class="lbl">Possible combinations</span>
+      <span class="num mono" id="comboCount">0</span>
+    </div>
+    <div id="rulesNote" class="layer-count" style="display:none;margin-top:2px;line-height:1.4;">compatibility rules active &mdash; actual unique combos may be lower than shown</div>
+  </aside>
+
+  <main>
+    <div class="card">
+      <h2>Canvas &amp; Collection Info</h2>
+      <p class="desc">Canvas size is detected from the first trait image you add. Adjust if needed &mdash; all layers composite at this size.</p>
+      <div class="row">
+        <div class="field">
+          <label for="canvasW">Width (px)</label>
+          <input type="number" id="canvasW" min="16" value="600">
+        </div>
+        <div class="field">
+          <label for="canvasH">Height (px)</label>
+          <input type="number" id="canvasH" min="16" value="600">
+        </div>
+      </div>
+      <div class="row" style="margin-top:12px;">
+        <div class="field">
+          <label for="collectionName">Collection name (used in filenames &amp; metadata)</label>
+          <input type="text" id="collectionName" value="My Collection">
+        </div>
+      </div>
+      <div class="row" style="margin-top:12px;">
+        <div class="field">
+          <label for="collectionDesc">Description (optional, goes in metadata JSON)</label>
+          <textarea id="collectionDesc" placeholder="A short description for each token's metadata..."></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Trait Rarity <span style="color:var(--text-dim);font-weight:400;">(optional)</span></h2>
+      <p class="desc">Set how often each trait should appear within its layer, as a percentage. Each layer must total exactly 100% before you can generate. New layers start out split evenly &mdash; edit any value and the rest stay where you left them.</p>
+      <div id="rarityBody"></div>
+      <div id="rarityEmpty" class="empty-hint">Add a layer with images to set rarity percentages.</div>
+      <div id="rarityWarn" class="warn" style="display:none;"></div>
+    </div>
+
+    <div class="card">
+      <h2>Compatibility Rules <span style="color:var(--text-dim);font-weight:400;">(optional)</span></h2>
+      <p class="desc">Restrict which traits are allowed to appear together &mdash; e.g. "when Background is Background-1, only allow Body types A, B, C." Every active rule is respected during generation and regeneration.</p>
+      <div id="rulesList"></div>
+      <div id="rulesEmpty" class="empty-hint">No rules yet &mdash; every trait can currently pair with every other trait. Add a rule once you have at least two layers with images.</div>
+      <button class="ghost" id="addRuleBtn" style="margin-top:10px;" disabled>+ Add Rule</button>
+    </div>
+
+    <div class="card">
+      <h2>Generate</h2>
+      <p class="desc">Choose how many combinations to generate &mdash; a quick test batch or the full run. Generating replaces the current gallery below.</p>
+      <div class="row" style="align-items:flex-end;">
+        <div class="field" style="max-width:180px;">
+          <label for="genCount">How many to generate</label>
+          <input type="number" id="genCount" min="1" max="10000" value="50">
+        </div>
+        <div class="field" style="flex:2;">
+          <div class="checkline">
+            <input type="checkbox" id="avoidDup" checked>
+            <label for="avoidDup" style="margin:0;">Avoid exact duplicate trait combinations where possible</label>
+          </div>
+        </div>
+        <div class="field" style="max-width:160px;">
+          <button class="primary" id="generateBtn" style="width:100%;" disabled>Generate</button>
+        </div>
+      </div>
+      <div id="genWarn" class="warn" style="display:none;"></div>
+      <div class="progress-wrap" id="genProgressWrap">
+        <div class="progress-track"><div class="progress-fill" id="genProgressFill"></div></div>
+        <div class="progress-label" id="genProgressLabel">0 / 0</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Gallery &amp; Export</h2>
+      <p class="desc">Spot something off? Regenerate just that one image &mdash; no need to redo the whole batch. When you're happy, download the images as a ZIP and/or the metadata as an OpenSea-ready CSV, both built from the exact same generated batch so filenames always match.</p>
+
+      <div class="gallery-toolbar">
+        <span class="count mono" id="galleryCount">0 generated</span>
+        <div class="pager" id="pagerControls" style="display:none;">
+          <button class="ghost icon" id="pagerPrev">&larr;</button>
+          <span>page <input type="number" id="pagerPage" min="1" value="1"> of <span id="pagerTotal">1</span></span>
+          <button class="ghost icon" id="pagerNext">&rarr;</button>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button id="csvExportBtn" disabled>Download Metadata CSV</button>
+          <button id="exportBtn" disabled>Download ZIP</button>
+        </div>
+      </div>
+
+      <div class="progress-wrap" id="exportProgressWrap">
+        <div class="progress-track"><div class="progress-fill" id="exportProgressFill"></div></div>
+        <div class="progress-label" id="exportProgressLabel">0 / 0</div>
+      </div>
+
+      <div class="grid" id="galleryGrid"></div>
+      <div id="galleryEmpty" class="empty-hint" style="margin-top:6px;">Nothing generated yet.</div>
+    </div>
+
+    <div class="sprockets" style="height:20px;border-top:1px solid var(--line);"></div>
+  </main>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---------- state ----------
+  let layers = [];           // [{id, name, traits:[{id,name,url,img,w,h}]}]  index0 = bottom of stack
+  let generated = [];        // [{id, tokenNum, selections:[{layerId,traitId}], thumbUrl}]
+  let rules = [];            // [{id, layerId, traitId, targetLayerId, allowed:Set<traitId>}]
+  let nextLayerId = 1, nextTraitId = 1, nextGenId = 1, nextRuleId = 1;
+  let canvasSizeLocked = false;
+  let pageSize = 100;
+  let currentPage = 1;
+
+  const $ = (id) => document.getElementById(id);
+  const layerList = $("layerList");
+  const emptyLayers = $("emptyLayers");
+  const comboCountEl = $("comboCount");
+  const canvasWInput = $("canvasW");
+  const canvasHInput = $("canvasH");
+  const generateBtn = $("generateBtn");
+  const genCountInput = $("genCount");
+  const avoidDupInput = $("avoidDup");
+  const genWarn = $("genWarn");
+  const galleryGrid = $("galleryGrid");
+  const galleryEmpty = $("galleryEmpty");
+  const galleryCount = $("galleryCount");
+  const exportBtn = $("exportBtn");
+  const csvExportBtn = $("csvExportBtn");
+  const statusPill = $("statusPill");
+  const pagerControls = $("pagerControls");
+  const pagerPrev = $("pagerPrev");
+  const pagerNext = $("pagerNext");
+  const pagerPage = $("pagerPage");
+  const pagerTotal = $("pagerTotal");
+  const rulesList = $("rulesList");
+  const rulesEmpty = $("rulesEmpty");
+  const addRuleBtn = $("addRuleBtn");
+  const rulesNote = $("rulesNote");
+
+  function setStatus(text) {
+    if (!text) { statusPill.classList.remove("show"); return; }
+    statusPill.textContent = text;
+    statusPill.classList.add("show");
+  }
+
+  function naturalSort(a, b) {
+    return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+  }
+
+  // ---------- layer management ----------
+  const addLayerInput = $("layerAddInput");
+  const appendLayerInput = $("layerAppendInput");
+  let appendTargetLayerId = null;
+
+  $("addLayerBtn").addEventListener("click", () => {
+    addLayerInput.value = "";
+    addLayerInput.click();
+  });
+
+  addLayerInput.addEventListener("change", async (e) => {
+    const files = Array.from(e.target.files || []).filter(f => f.type.startsWith("image/"));
+    if (!files.length) return;
+    files.sort((a, b) => naturalSort(a.webkitRelativePath || a.name, b.webkitRelativePath || b.name));
+    const folderName = (files[0].webkitRelativePath || files[0].name).split("/")[0];
+    const layer = { id: nextLayerId++, name: folderName, traits: [], weightsCustomized: false };
+    layers.push(layer);
+    setStatus("loading images\u2026");
+    await loadFilesIntoLayer(files, layer);
+    initTraitWeightsEven(layer);
+    setStatus(null);
+    renderLayers();
+  });
+
+  appendLayerInput.addEventListener("change", async (e) => {
+    const files = Array.from(e.target.files || []).filter(f => f.type.startsWith("image/"));
+    const layer = layers.find(l => l.id === appendTargetLayerId);
+    if (!files.length || !layer) return;
+    files.sort((a, b) => naturalSort(a.name, b.name));
+    setStatus("loading images\u2026");
+    await loadFilesIntoLayer(files, layer);
+    if (!layer.weightsCustomized) initTraitWeightsEven(layer);
+    setStatus(null);
+    renderLayers();
+  });
+
+  function loadImage(url) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = url;
+    });
+  }
+
+  async function loadFilesIntoLayer(files, layer) {
+    for (const file of files) {
+      const url = URL.createObjectURL(file);
+      try {
+        const img = await loadImage(url);
+        if (!canvasSizeLocked) {
+          canvasWInput.value = img.naturalWidth;
+          canvasHInput.value = img.naturalHeight;
+          canvasSizeLocked = true;
+        }
+        const name = file.name.replace(/\.[^/.]+$/, "");
+        layer.traits.push({ id: nextTraitId++, name, url, img, weight: 0 });
+      } catch (err) {
+        console.warn("Could not load image", file.name, err);
+      }
+    }
+  }
+
+  function moveLayer(id, dir) {
+    const idx = layers.findIndex(l => l.id === id);
+    const swapWith = idx + dir;
+    if (idx < 0 || swapWith < 0 || swapWith >= layers.length) return;
+    [layers[idx], layers[swapWith]] = [layers[swapWith], layers[idx]];
+    renderLayers();
+  }
+
+  function removeLayer(id) {
+    const layer = layers.find(l => l.id === id);
+    if (layer) layer.traits.forEach(t => URL.revokeObjectURL(t.url));
+    layers = layers.filter(l => l.id !== id);
+    renderLayers();
+  }
+
+  function removeTrait(layerId, traitId) {
+    const layer = layers.find(l => l.id === layerId);
+    if (!layer) return;
+    const t = layer.traits.find(t => t.id === traitId);
+    if (t) URL.revokeObjectURL(t.url);
+    layer.traits = layer.traits.filter(t => t.id !== traitId);
+    if (!layer.weightsCustomized) initTraitWeightsEven(layer);
+    renderLayers();
+  }
+
+  function renderLayers() {
+    layerList.innerHTML = "";
+    emptyLayers.style.display = layers.length ? "none" : "block";
+
+    layers.forEach((layer, idx) => {
+      const card = document.createElement("div");
+      card.className = "layer-card";
+
+      const top = document.createElement("div");
+      top.className = "layer-card-top";
+
+      const order = document.createElement("div");
+      order.className = "layer-order";
+      const up = document.createElement("button");
+      up.className = "ghost"; up.textContent = "\u25B2"; up.title = "Move up (toward top of stack)";
+      up.disabled = idx === layers.length - 1;
+      up.addEventListener("click", () => moveLayer(layer.id, 1));
+      const down = document.createElement("button");
+      down.className = "ghost"; down.textContent = "\u25BC"; down.title = "Move down (toward bottom of stack)";
+      down.disabled = idx === 0;
+      down.addEventListener("click", () => moveLayer(layer.id, -1));
+      order.appendChild(up); order.appendChild(down);
+
+      const nameInput = document.createElement("input");
+      nameInput.className = "layer-name mono";
+      nameInput.value = layer.name;
+      nameInput.addEventListener("change", () => { layer.name = nameInput.value || layer.name; updateCombos(); });
+
+      const countLbl = document.createElement("span");
+      countLbl.className = "layer-count mono";
+      countLbl.textContent = layer.traits.length + " traits";
+
+      top.appendChild(order);
+      top.appendChild(nameInput);
+      top.appendChild(countLbl);
+
+      const badge = document.createElement("div");
+      badge.className = "layer-count";
+      badge.style.marginBottom = "6px";
+      badge.textContent = (idx === layers.length - 1 ? "top of stack" : idx === 0 ? "bottom of stack" : "z-index " + (idx + 1));
+
+      const strip = document.createElement("div");
+      strip.className = "layer-strip";
+      layer.traits.forEach(t => {
+        const chip = document.createElement("div");
+        chip.className = "trait-chip";
+        chip.title = t.name;
+        const img = document.createElement("img");
+        img.src = t.url;
+        const rm = document.createElement("div");
+        rm.className = "rm"; rm.textContent = "\u2715";
+        rm.addEventListener("click", () => removeTrait(layer.id, t.id));
+        chip.appendChild(img); chip.appendChild(rm);
+        strip.appendChild(chip);
+      });
+
+      const actions = document.createElement("div");
+      actions.className = "layer-actions";
+      const addMore = document.createElement("button");
+      addMore.className = "ghost"; addMore.textContent = "+ add images";
+      addMore.addEventListener("click", () => { appendTargetLayerId = layer.id; appendLayerInput.value = ""; appendLayerInput.click(); });
+      const del = document.createElement("button");
+      del.className = "ghost danger"; del.textContent = "remove layer";
+      del.addEventListener("click", () => removeLayer(layer.id));
+      actions.appendChild(addMore); actions.appendChild(del);
+
+      card.appendChild(top);
+      card.appendChild(badge);
+      card.appendChild(strip);
+      card.appendChild(actions);
+      layerList.appendChild(card);
+    });
+
+    updateCombos();
+    renderRules();
+    renderRarity();
+  }
+
+  function totalCombos() {
+    if (!layers.length) return 0;
+    return layers.reduce((acc, l) => acc * Math.max(l.traits.length, 0), 1);
+  }
+
+  function updateCombos() {
+    const combos = totalCombos();
+    comboCountEl.textContent = combos.toLocaleString();
+    refreshRarityValidity();
+    checkGenWarning();
+  }
+
+  function checkGenWarning() {
+    const combos = totalCombos();
+    const count = parseInt(genCountInput.value, 10) || 0;
+    if (avoidDupInput.checked && combos > 0 && count > combos) {
+      genWarn.style.display = "block";
+      genWarn.textContent = "Only " + combos.toLocaleString() + " unique combinations are possible with the current layers \u2014 requesting " + count.toLocaleString() + " will include duplicates once the unique pool runs out.";
+    } else {
+      genWarn.style.display = "none";
+    }
+  }
+  genCountInput.addEventListener("input", checkGenWarning);
+  avoidDupInput.addEventListener("change", checkGenWarning);
+  canvasWInput.addEventListener("change", () => { canvasSizeLocked = true; });
+  canvasHInput.addEventListener("change", () => { canvasSizeLocked = true; });
+
+  // ---------- compatibility rules ----------
+  function cleanupRules() {
+    rules = rules.filter(r => {
+      const sourceLayer = layers.find(l => l.id === r.layerId);
+      const targetLayer = layers.find(l => l.id === r.targetLayerId);
+      if (!sourceLayer || !targetLayer) return false;
+      if (!sourceLayer.traits.find(t => t.id === r.traitId)) return false;
+      const validIds = new Set(targetLayer.traits.map(t => t.id));
+      r.allowed = new Set([...r.allowed].filter(id => validIds.has(id)));
+      return true;
+    });
+  }
+
+  function traitNameFor(layerId, traitId) {
+    const layer = layers.find(l => l.id === layerId);
+    const trait = layer ? layer.traits.find(t => t.id === traitId) : null;
+    return trait ? trait.name : "?";
+  }
+
+  function syncRuleAllowedToTarget(rule) {
+    const target = layers.find(l => l.id === rule.targetLayerId);
+    rule.allowed = new Set(target ? target.traits.map(t => t.id) : []);
+  }
+
+  function addRule() {
+    const eligible = layers.filter(l => l.traits.length > 0);
+    if (eligible.length < 2) return;
+    const sourceLayer = eligible[0];
+    const targetLayer = eligible.find(l => l.id !== sourceLayer.id) || eligible[1];
+    const rule = {
+      id: nextRuleId++,
+      layerId: sourceLayer.id,
+      traitId: sourceLayer.traits[0].id,
+      targetLayerId: targetLayer.id,
+      allowed: new Set(targetLayer.traits.map(t => t.id))
+    };
+    rules.push(rule);
+    renderRules();
+  }
+
+  function removeRule(id) {
+    rules = rules.filter(r => r.id !== id);
+    renderRules();
+  }
+
+  function setRuleSourceLayer(rule, layerId) {
+    rule.layerId = layerId;
+    const layer = layers.find(l => l.id === layerId);
+    rule.traitId = layer && layer.traits[0] ? layer.traits[0].id : null;
+    if (rule.targetLayerId === layerId) {
+      const alt = layers.find(l => l.id !== layerId && l.traits.length > 0);
+      rule.targetLayerId = alt ? alt.id : null;
+    }
+    syncRuleAllowedToTarget(rule);
+    renderRules();
+  }
+
+  function setRuleSourceTrait(rule, traitId) {
+    rule.traitId = traitId;
+    renderRules();
+  }
+
+  function setRuleTargetLayer(rule, layerId) {
+    rule.targetLayerId = layerId;
+    syncRuleAllowedToTarget(rule);
+    renderRules();
+  }
+
+  function toggleRuleAllowed(rule, traitId) {
+    if (rule.allowed.has(traitId)) rule.allowed.delete(traitId);
+    else rule.allowed.add(traitId);
+    renderRules();
+  }
+
+  function renderRules() {
+    cleanupRules();
+    rulesList.innerHTML = "";
+    const eligibleLayers = layers.filter(l => l.traits.length > 0);
+    addRuleBtn.disabled = eligibleLayers.length < 2;
+    rulesEmpty.style.display = rules.length ? "none" : "block";
+    rulesNote.style.display = rules.length ? "block" : "none";
+
+    rules.forEach(rule => {
+      const card = document.createElement("div");
+      card.className = "rule-card";
+
+      const row = document.createElement("div");
+      row.className = "rule-row";
+
+      const whenSpan = document.createElement("span");
+      whenSpan.className = "lbl-text"; whenSpan.textContent = "When";
+
+      const layerSel = document.createElement("select");
+      eligibleLayers.forEach(l => {
+        const opt = document.createElement("option");
+        opt.value = l.id; opt.textContent = l.name;
+        if (l.id === rule.layerId) opt.selected = true;
+        layerSel.appendChild(opt);
+      });
+      layerSel.addEventListener("change", () => setRuleSourceLayer(rule, parseInt(layerSel.value, 10)));
+
+      const isSpan = document.createElement("span");
+      isSpan.className = "lbl-text"; isSpan.textContent = "is";
+
+      const sourceLayerObj = layers.find(l => l.id === rule.layerId);
+      const traitSel = document.createElement("select");
+      (sourceLayerObj ? sourceLayerObj.traits : []).forEach(t => {
+        const opt = document.createElement("option");
+        opt.value = t.id; opt.textContent = t.name;
+        if (t.id === rule.traitId) opt.selected = true;
+        traitSel.appendChild(opt);
+      });
+      traitSel.addEventListener("change", () => setRuleSourceTrait(rule, parseInt(traitSel.value, 10)));
+
+      const arrowSpan = document.createElement("span");
+      arrowSpan.className = "lbl-text"; arrowSpan.textContent = "\u2192 constrain";
+
+      const targetSel = document.createElement("select");
+      eligibleLayers.filter(l => l.id !== rule.layerId).forEach(l => {
+        const opt = document.createElement("option");
+        opt.value = l.id; opt.textContent = l.name;
+        if (l.id === rule.targetLayerId) opt.selected = true;
+        targetSel.appendChild(opt);
+      });
+      targetSel.addEventListener("change", () => setRuleTargetLayer(rule, parseInt(targetSel.value, 10)));
+
+      const closeBtn = document.createElement("button");
+      closeBtn.className = "ghost danger rule-close icon";
+      closeBtn.textContent = "\u2715";
+      closeBtn.title = "Remove this rule";
+      closeBtn.addEventListener("click", () => removeRule(rule.id));
+
+      row.appendChild(whenSpan);
+      row.appendChild(layerSel);
+      row.appendChild(isSpan);
+      row.appendChild(traitSel);
+      row.appendChild(arrowSpan);
+      row.appendChild(targetSel);
+      row.appendChild(closeBtn);
+      card.appendChild(row);
+
+      const targetLayerObj = layers.find(l => l.id === rule.targetLayerId);
+      if (targetLayerObj) {
+        const traitsRow = document.createElement("div");
+        traitsRow.className = "rule-target-traits";
+        targetLayerObj.traits.forEach(t => {
+          const chip = document.createElement("div");
+          const isAllowed = rule.allowed.has(t.id);
+          chip.className = "rule-trait-toggle" + (isAllowed ? "" : " blocked");
+          chip.title = t.name + (isAllowed ? " (allowed \u2014 click to block)" : " (blocked \u2014 click to allow)");
+          const img = document.createElement("img");
+          img.src = t.url;
+          const lbl = document.createElement("div");
+          lbl.className = "lbl"; lbl.textContent = t.name;
+          chip.appendChild(img); chip.appendChild(lbl);
+          chip.addEventListener("click", () => toggleRuleAllowed(rule, t.id));
+          traitsRow.appendChild(chip);
+        });
+        card.appendChild(traitsRow);
+
+        const summary = document.createElement("div");
+        summary.className = "rule-summary";
+        summary.textContent = (sourceLayerObj ? sourceLayerObj.name : "?") + ": " + traitNameFor(rule.layerId, rule.traitId) +
+          "  \u2192  " + targetLayerObj.name + ": " + rule.allowed.size + " of " + targetLayerObj.traits.length + " traits allowed";
+        card.appendChild(summary);
+      }
+
+      rulesList.appendChild(card);
+    });
+  }
+
+  addRuleBtn.addEventListener("click", addRule);
+
+  // ---------- trait rarity ----------
+  function round1(n) { return Math.round(n * 10) / 10; }
+
+  function initTraitWeightsEven(layer) {
+    const n = layer.traits.length;
+    if (n === 0) return;
+    const base = Math.floor((100 / n) * 10) / 10;
+    let assigned = 0;
+    layer.traits.forEach((t, i) => {
+      if (i < n - 1) { t.weight = base; assigned += base; }
+      else { t.weight = round1(100 - assigned); }
+    });
+  }
+
+  function layerWeightSum(layer) {
+    return layer.traits.reduce((s, t) => s + (Number(t.weight) || 0), 0);
+  }
+
+  function updateRaritySumBadge(layer) {
+    const badge = document.getElementById("rarity-sum-" + layer.id);
+    if (!badge) return;
+    const sum = layerWeightSum(layer);
+    const valid = Math.abs(sum - 100) <= 0.05;
+    badge.textContent = round1(sum) + "%";
+    badge.classList.toggle("ok", valid);
+    badge.classList.toggle("bad", !valid);
+  }
+
+  function refreshRarityValidity() {
+    const rarityWarnEl = $("rarityWarn");
+    const invalid = layers.filter(l => l.traits.length > 0)
+      .map(l => ({ layer: l, sum: layerWeightSum(l) }))
+      .filter(x => Math.abs(x.sum - 100) > 0.05);
+    if (invalid.length) {
+      rarityWarnEl.style.display = "block";
+      rarityWarnEl.textContent = "Fix trait rarity before generating \u2014 " +
+        invalid.map(x => x.layer.name + ": " + round1(x.sum) + "%").join(", ") +
+        " (each layer must total exactly 100%).";
+    } else {
+      rarityWarnEl.style.display = "none";
+    }
+    refreshGenerateAvailability();
+  }
+
+  function refreshGenerateAvailability() {
+    const ready = layers.length > 0 && layers.every(l => l.traits.length > 0);
+    const raritiesOk = layers.filter(l => l.traits.length > 0)
+      .every(l => Math.abs(layerWeightSum(l) - 100) <= 0.05);
+    generateBtn.disabled = !ready || !raritiesOk;
+  }
+
+  function renderRarity() {
+    const container = $("rarityBody");
+    const emptyEl = $("rarityEmpty");
+    container.innerHTML = "";
+    const layersWithTraits = layers.filter(l => l.traits.length > 0);
+    emptyEl.style.display = layersWithTraits.length ? "none" : "block";
+
+    layersWithTraits.forEach(layer => {
+      const block = document.createElement("div");
+      block.className = "rarity-layer";
+
+      const head = document.createElement("div");
+      head.className = "rarity-layer-head";
+      const title = document.createElement("span");
+      title.className = "rarity-layer-name";
+      title.textContent = layer.name;
+      const badge = document.createElement("span");
+      badge.className = "rarity-sum-badge mono";
+      badge.id = "rarity-sum-" + layer.id;
+      const evenBtn = document.createElement("button");
+      evenBtn.className = "ghost icon";
+      evenBtn.style.fontSize = "11px";
+      evenBtn.textContent = "distribute evenly";
+      evenBtn.addEventListener("click", () => {
+        layer.weightsCustomized = false;
+        initTraitWeightsEven(layer);
+        renderRarity();
+        refreshRarityValidity();
+      });
+      head.appendChild(title);
+      head.appendChild(badge);
+      head.appendChild(evenBtn);
+      block.appendChild(head);
+
+      const rows = document.createElement("div");
+      rows.className = "rarity-rows";
+      layer.traits.forEach(t => {
+        const row = document.createElement("div");
+        row.className = "rarity-row";
+
+        const thumb = document.createElement("div");
+        thumb.className = "rarity-thumb";
+        const img = document.createElement("img");
+        img.src = t.url;
+        thumb.appendChild(img);
+
+        const name = document.createElement("span");
+        name.className = "rarity-trait-name";
+        name.textContent = t.name;
+
+        const wrap = document.createElement("span");
+        wrap.className = "rarity-input-wrap";
+        const input = document.createElement("input");
+        input.type = "number"; input.min = "0"; input.max = "100"; input.step = "0.1";
+        input.value = (t.weight != null ? t.weight : 0);
+        input.addEventListener("input", () => {
+          let v = parseFloat(input.value);
+          if (isNaN(v)) v = 0;
+          v = Math.max(0, Math.min(100, v));
+          t.weight = v;
+          layer.weightsCustomized = true;
+          updateRaritySumBadge(layer);
+          refreshRarityValidity();
+        });
+        const pct = document.createElement("span");
+        pct.className = "rarity-pct-sign"; pct.textContent = "%";
+        wrap.appendChild(input); wrap.appendChild(pct);
+
+        row.appendChild(thumb); row.appendChild(name); row.appendChild(wrap);
+        rows.appendChild(row);
+      });
+      block.appendChild(rows);
+      container.appendChild(block);
+      updateRaritySumBadge(layer);
+    });
+  }
+
+  function weightedPickFromTraits(traitsArr) {
+    const total = traitsArr.reduce((s, t) => s + Math.max(0, Number(t.weight) || 0), 0);
+    if (total <= 0) return traitsArr[Math.floor(Math.random() * traitsArr.length)];
+    let r = Math.random() * total;
+    for (const t of traitsArr) {
+      const w = Math.max(0, Number(t.weight) || 0);
+      r -= w;
+      if (r <= 1e-9) return t;
+    }
+    return traitsArr[traitsArr.length - 1];
+  }
+
+  // ---------- constrained random selection ----------
+  function fullAllowedSetForLayer(layerId) {
+    const layer = layers.find(l => l.id === layerId);
+    return new Set(layer ? layer.traits.map(t => t.id) : []);
+  }
+
+  function allowedTraitsGiven(layerId, selMap) {
+    let allowed = fullAllowedSetForLayer(layerId);
+    for (const rule of rules) {
+      if (rule.targetLayerId === layerId && rule.layerId != null && rule.traitId != null) {
+        if (selMap[rule.layerId] === rule.traitId) {
+          allowed = new Set([...allowed].filter(id => rule.allowed.has(id)));
+        }
+      }
+    }
+    return allowed;
+  }
+
+  function buildConstrainedSelections() {
+    const selMap = {};
+    for (const layer of layers) {
+      const t = pickRandomTrait(layer);
+      selMap[layer.id] = t.id;
+    }
+    if (rules.length) {
+      const maxPasses = 8;
+      for (let pass = 0; pass < maxPasses; pass++) {
+        let changed = false;
+        for (const layer of layers) {
+          const allowed = allowedTraitsGiven(layer.id, selMap);
+          if (allowed.size > 0 && !allowed.has(selMap[layer.id])) {
+            const candidateTraits = layer.traits.filter(t => allowed.has(t.id));
+            const picked = weightedPickFromTraits(candidateTraits);
+            selMap[layer.id] = picked.id;
+            changed = true;
+          }
+        }
+        if (!changed) break;
+      }
+    }
+    return layers.map(l => ({ layerId: l.id, traitId: selMap[l.id] }));
+  }
+
+  // ---------- compositing ----------
+  const fullCanvas = document.createElement("canvas");
+  const fullCtx = fullCanvas.getContext("2d");
+  const thumbCanvas = document.createElement("canvas");
+  const thumbCtx = thumbCanvas.getContext("2d");
+  const THUMB_SIZE = 260;
+
+  function pickRandomTrait(layer) {
+    return weightedPickFromTraits(layer.traits);
+  }
+
+  function randomSelections() {
+    return layers.map(l => {
+      const t = pickRandomTrait(l);
+      return { layerId: l.id, traitId: t.id };
+    });
+  }
+
+  function signatureOf(selections) {
+    return selections.map(s => s.layerId + ":" + s.traitId).join("|");
+  }
+
+  function traitFor(layerId, traitId) {
+    const layer = layers.find(l => l.id === layerId);
+    if (!layer) return null;
+    return layer.traits.find(t => t.id === traitId) || null;
+  }
+
+  function compositeFull(selections, w, h) {
+    fullCanvas.width = w;
+    fullCanvas.height = h;
+    fullCtx.clearRect(0, 0, w, h);
+    for (const sel of selections) {
+      const t = traitFor(sel.layerId, sel.traitId);
+      if (t && t.img) fullCtx.drawImage(t.img, 0, 0, w, h);
+    }
+    return fullCanvas;
+  }
+
+  function makeThumbFromFull(w, h) {
+    const scale = Math.min(THUMB_SIZE / w, THUMB_SIZE / h);
+    const tw = Math.max(1, Math.round(w * scale));
+    const th = Math.max(1, Math.round(h * scale));
+    thumbCanvas.width = tw;
+    thumbCanvas.height = th;
+    thumbCtx.clearRect(0, 0, tw, th);
+    thumbCtx.drawImage(fullCanvas, 0, 0, tw, th);
+    return thumbCanvas.toDataURL("image/png");
+  }
+
+  function canvasToBlob(canvas) {
+    return new Promise(resolve => canvas.toBlob(b => resolve(b), "image/png"));
+  }
+
+  // ---------- generation ----------
+  const genProgressWrap = $("genProgressWrap");
+  const genProgressFill = $("genProgressFill");
+  const genProgressLabel = $("genProgressLabel");
+
+  generateBtn.addEventListener("click", async () => {
+    const count = Math.max(1, Math.min(10000, parseInt(genCountInput.value, 10) || 1));
+    if (generated.length > 0) {
+      const ok = confirm("This will replace your current gallery of " + generated.length.toLocaleString() + " image(s). Continue?");
+      if (!ok) return;
+    }
+    await runGenerate(count, avoidDupInput.checked);
+  });
+
+  async function runGenerate(count, avoidDup) {
+    generateBtn.disabled = true;
+    exportBtn.disabled = true;
+    csvExportBtn.disabled = true;
+    setStatus("generating\u2026");
+    generated.forEach(g => URL.revokeObjectURL(g.thumbUrl));
+    generated = [];
+    galleryGrid.innerHTML = "";
+
+    const w = parseInt(canvasWInput.value, 10) || 600;
+    const h = parseInt(canvasHInput.value, 10) || 600;
+    const used = new Set();
+    let duplicateCount = 0;
+
+    genProgressWrap.classList.add("active");
+
+    for (let i = 0; i < count; i++) {
+      let selections, sig;
+      let attempts = 0;
+      do {
+        selections = buildConstrainedSelections();
+        sig = signatureOf(selections);
+        attempts++;
+      } while (avoidDup && used.has(sig) && attempts < 30);
+      if (avoidDup && used.has(sig)) duplicateCount++;
+      used.add(sig);
+
+      compositeFull(selections, w, h);
+      const thumbUrl = makeThumbFromFull(w, h);
+
+      generated.push({ id: nextGenId++, tokenNum: i + 1, selections, thumbUrl });
+
+      if (i % 15 === 0 || i === count - 1) {
+        genProgressFill.style.width = (((i + 1) / count) * 100) + "%";
+        genProgressLabel.textContent = (i + 1).toLocaleString() + " / " + count.toLocaleString();
+        await new Promise(r => setTimeout(r, 0));
+      }
+    }
+
+    genProgressWrap.classList.remove("active");
+    setStatus(null);
+    generateBtn.disabled = false;
+    exportBtn.disabled = generated.length === 0;
+    csvExportBtn.disabled = generated.length === 0;
+    if (duplicateCount > 0) {
+      genWarn.style.display = "block";
+      genWarn.textContent = "Generated " + count.toLocaleString() + " images, including " + duplicateCount.toLocaleString() + " duplicate combination(s) \u2014 the unique trait pool ran out before reaching your requested count.";
+    }
+    currentPage = 1;
+    renderGallery();
+  }
+
+  // ---------- regenerate single ----------
+  function regenerateOne(genId) {
+    const item = generated.find(g => g.id === genId);
+    if (!item) return;
+    const w = parseInt(canvasWInput.value, 10) || 600;
+    const h = parseInt(canvasHInput.value, 10) || 600;
+    item.selections = buildConstrainedSelections();
+    compositeFull(item.selections, w, h);
+    URL.revokeObjectURL(item.thumbUrl);
+    item.thumbUrl = makeThumbFromFull(w, h);
+    renderGallery();
+  }
+
+  async function downloadOne(genId) {
+    const item = generated.find(g => g.id === genId);
+    if (!item) return;
+    const w = parseInt(canvasWInput.value, 10) || 600;
+    const h = parseInt(canvasHInput.value, 10) || 600;
+    compositeFull(item.selections, w, h);
+    const blob = await canvasToBlob(fullCanvas);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const base = ($("collectionName").value || "collection").trim().replace(/[^a-z0-9\-_ ]/gi, "").replace(/\s+/g, "-");
+    a.href = url;
+    a.download = (base || "collection") + "-" + item.tokenNum + ".png";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+
+  // ---------- gallery rendering (paginated) ----------
+  function renderGallery() {
+    galleryGrid.innerHTML = "";
+    galleryEmpty.style.display = generated.length ? "none" : "block";
+    galleryCount.textContent = generated.length.toLocaleString() + " generated";
+
+    const totalPages = Math.max(1, Math.ceil(generated.length / pageSize));
+    currentPage = Math.min(currentPage, totalPages);
+    pagerControls.style.display = generated.length > pageSize ? "flex" : "none";
+    pagerPage.value = currentPage;
+    pagerTotal.textContent = totalPages;
+    pagerPrev.disabled = currentPage <= 1;
+    pagerNext.disabled = currentPage >= totalPages;
+
+    const start = (currentPage - 1) * pageSize;
+    const pageItems = generated.slice(start, start + pageSize);
+
+    for (const item of pageItems) {
+      const card = document.createElement("div");
+      card.className = "token";
+
+      const thumb = document.createElement("div");
+      thumb.className = "thumb";
+      const img = document.createElement("img");
+      img.src = item.thumbUrl;
+      img.loading = "lazy";
+      thumb.appendChild(img);
+
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      const id = document.createElement("div");
+      id.className = "id";
+      id.textContent = "#" + item.tokenNum;
+
+      const btnrow = document.createElement("div");
+      btnrow.className = "btnrow";
+      const regenBtn = document.createElement("button");
+      regenBtn.textContent = "\u21BB regen";
+      regenBtn.title = "Regenerate this one image";
+      regenBtn.addEventListener("click", () => regenerateOne(item.id));
+      const dlBtn = document.createElement("button");
+      dlBtn.textContent = "\u2193";
+      dlBtn.title = "Download this image";
+      dlBtn.addEventListener("click", () => downloadOne(item.id));
+      btnrow.appendChild(regenBtn);
+      btnrow.appendChild(dlBtn);
+
+      meta.appendChild(id);
+      meta.appendChild(btnrow);
+      card.appendChild(thumb);
+      card.appendChild(meta);
+      galleryGrid.appendChild(card);
+    }
+  }
+
+  pagerPrev.addEventListener("click", () => { currentPage--; renderGallery(); });
+  pagerNext.addEventListener("click", () => { currentPage++; renderGallery(); });
+  pagerPage.addEventListener("change", () => {
+    const totalPages = Math.max(1, Math.ceil(generated.length / pageSize));
+    currentPage = Math.min(Math.max(1, parseInt(pagerPage.value, 10) || 1), totalPages);
+    renderGallery();
+  });
+
+  // ---------- export ----------
+  const exportProgressWrap = $("exportProgressWrap");
+  const exportProgressFill = $("exportProgressFill");
+  const exportProgressLabel = $("exportProgressLabel");
+
+  exportBtn.addEventListener("click", async () => {
+    if (!generated.length) return;
+    exportBtn.disabled = true;
+    generateBtn.disabled = true;
+    setStatus("exporting\u2026");
+    exportProgressWrap.classList.add("active");
+
+    const zip = new JSZip();
+    const imagesFolder = zip.folder("images");
+    const metaFolder = zip.folder("metadata");
+    const w = parseInt(canvasWInput.value, 10) || 600;
+    const h = parseInt(canvasHInput.value, 10) || 600;
+    const collectionName = ($("collectionName").value || "Collection").trim();
+    const collectionDesc = $("collectionDesc").value || "";
+
+    for (let i = 0; i < generated.length; i++) {
+      const item = generated[i];
+      compositeFull(item.selections, w, h);
+      const blob = await canvasToBlob(fullCanvas);
+      imagesFolder.file(item.tokenNum + ".png", blob);
+
+      const attributes = item.selections.map(sel => {
+        const layer = layers.find(l => l.id === sel.layerId);
+        const trait = traitFor(sel.layerId, sel.traitId);
+        return { trait_type: layer ? layer.name : "Layer", value: trait ? trait.name : "Unknown" };
+      });
+      const metadata = {
+        name: collectionName + " #" + item.tokenNum,
+        description: collectionDesc,
+        image: item.tokenNum + ".png",
+        attributes
+      };
+      metaFolder.file(item.tokenNum + ".json", JSON.stringify(metadata, null, 2));
+
+      if (i % 25 === 0 || i === generated.length - 1) {
+        exportProgressFill.style.width = (((i + 1) / generated.length) * 100) + "%";
+        exportProgressLabel.textContent = "packaging " + (i + 1).toLocaleString() + " / " + generated.length.toLocaleString();
+        await new Promise(r => setTimeout(r, 0));
+      }
+    }
+
+    exportProgressLabel.textContent = "compressing zip\u2026";
+    const content = await zip.generateAsync({ type: "blob", compression: "STORE" }, (meta) => {
+      exportProgressFill.style.width = meta.percent.toFixed(0) + "%";
+    });
+
+    const url = URL.createObjectURL(content);
+    const a = document.createElement("a");
+    const base = collectionName.replace(/[^a-z0-9\-_ ]/gi, "").replace(/\s+/g, "-") || "collection";
+    a.href = url;
+    a.download = base + ".zip";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 8000);
+
+    exportProgressWrap.classList.remove("active");
+    setStatus(null);
+    exportBtn.disabled = false;
+    generateBtn.disabled = false;
+  });
+
+  // ---------- metadata CSV export (OpenSea bulk-upload format) ----------
+  function buildOpenSeaCsv() {
+    const collectionName = ($("collectionName").value || "Collection").trim();
+    const collectionDesc = $("collectionDesc").value || "";
+    const fields = ["tokenID", "name", "description", "file_name"];
+    layers.forEach(l => fields.push("attributes[" + l.name + "]"));
+
+    const rows = generated.map(item => {
+      const row = {
+        tokenID: item.tokenNum,
+        name: collectionName + " #" + item.tokenNum,
+        description: collectionDesc,
+        file_name: item.tokenNum + ".png"
+      };
+      item.selections.forEach(sel => {
+        const layer = layers.find(l => l.id === sel.layerId);
+        const trait = traitFor(sel.layerId, sel.traitId);
+        if (layer) row["attributes[" + layer.name + "]"] = trait ? trait.name : "";
+      });
+      return row;
+    });
+
+    return Papa.unparse({ fields, data: rows });
+  }
+
+  csvExportBtn.addEventListener("click", () => {
+    if (!generated.length) return;
+    const csv = buildOpenSeaCsv();
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const collectionName = ($("collectionName").value || "collection").trim();
+    const base = collectionName.replace(/[^a-z0-9\-_ ]/gi, "").replace(/\s+/g, "-").toLowerCase() || "collection";
+    a.href = url;
+    a.download = base + "-metadata.csv";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  });
+
+  renderLayers();
+})();
+</script>
+</body>
+</html>
